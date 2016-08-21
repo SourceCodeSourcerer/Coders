@@ -43,7 +43,7 @@ public class OregonDecoderTest {
 
     @Test
     public void tempHumiditySensor1D20WithKnownTestVectorDirectly() throws Exception {
-        final byte message[] = {0xA, 0x1, 0xD, 0x2, 0x0, 0x1, 0x6, 0xB, 0x1, 0x0, 0x9, 0x1, 0x0, 0x7, 0x3, 0xA, 0x1, 0x4};
+        final byte message[] = { 0xA, 0x1, 0xD, 0x2, 0x0, 0x1, 0x6, 0xB, 0x1, 0x0, 0x9, 0x1, 0x0, 0x7, 0x3, 0xA, 0x1, 0x4 };
         decoder.decodeMessage(message);
         verifyTemperature(0x1D20, 190);
         assertThat(getMessageField("Moisture"), is(37));
@@ -54,6 +54,34 @@ public class OregonDecoderTest {
         receiveMessage("A1D2016B5091073A54");
         verify(sink, times(1)).parsedMessage(messageCaptor.capture());
         assertThat(getMessageField("LowBattery"), is(1));
+    }
+
+    // Ref:
+    // http://wmrx00.sourceforge.net/Arduino/OregonScientific-RF-Protocols.pdf
+    @Test
+    public void tempHumiditySensor1D20WithLowBatteryAndChannelShouldReallyBe3() throws Exception {
+        receiveMessage("A1D20485C480882835");
+        verify(sink, times(1)).parsedMessage(messageCaptor.capture());
+        assertThat(getMessageField("LowBattery"), is(1));
+        assertThat(getMessageField("SensorId"), is(0x1D20));
+        assertThat(getMessageField("Channel"), is(3));
+        assertThat(getMessageField("Id"), is(0x85));
+        assertThat(getMessageField("Temp"), is(-84));
+        assertThat(getMessageField("Moisture"), is(28));
+    }
+
+    // Ref:
+    // http://wmrx00.sourceforge.net/Arduino/OregonScientific-RF-Protocols.pdf
+    @Test
+    public void tempHumiditySensor1D20WithLowBatteryAndChannelShouldReallyBe1() throws Exception {
+        receiveMessage("A1D2016B1091073A14");
+        verify(sink, times(1)).parsedMessage(messageCaptor.capture());
+        assertThat(getMessageField("LowBattery"), is(0));
+        assertThat(getMessageField("SensorId"), is(0x1D20));
+        assertThat(getMessageField("Channel"), is(1));
+        assertThat(getMessageField("Id"), is(0x6B));
+        assertThat(getMessageField("Temp"), is(190));
+        assertThat(getMessageField("Moisture"), is(37));
     }
 
     @Test
@@ -101,6 +129,18 @@ public class OregonDecoderTest {
     }
 
     @Test
+    public void rainSensor2914WithKnownTestVector() throws Exception {
+        receiveMessage("A29140091498896771055");
+        verify(sink, times(1)).parsedMessage(messageCaptor.capture());
+        assertThat(getMessageField("SensorId"), is(0x2914));
+        assertThat(getMessageField("Channel"), is(0));
+        assertThat(getMessageField("Id"), is(0x9));
+        assertThat(getMessageField("LowBattery"), is(0));
+        assertThat(getMessageField("RainRate"), is(8894));
+        assertThat(getMessageField("TotalRain"), is(17769));
+    }
+
+    @Test
     public void tempHumidityPressureSensor5D60WithKnownTestVector() throws Exception {
         receiveMessage("A5D6016B109107300FF1E5");
         verifyTemperature(0x5D60, 190);
@@ -139,7 +179,7 @@ public class OregonDecoderTest {
     }
 
     private void receiveMessage(String s) {
-        for(char c : s.toCharArray()) {
+        for (char c : s.toCharArray()) {
             decoder.addNibble(Byte.parseByte("" + c, 16));
         }
     }
@@ -159,8 +199,7 @@ public class OregonDecoderTest {
         JirFileTestPlayer player = new JirFileTestPlayer(JirFileTestPlayer.OREGON_DECODER);
 
         // Using a known test vector
-        player.playFile(this.getClass().getClassLoader()
-                .getResourceAsStream("nu/nethome/coders/decoders/oregon1.jir"));
+        player.playFile(this.getClass().getClassLoader().getResourceAsStream("nu/nethome/coders/decoders/oregon1.jir"));
 
         assertThat(player.getMessageField(0, "SensorId"), is(0x1D20));
         assertThat(player.getMessageField(0, "Channel"), is(1));

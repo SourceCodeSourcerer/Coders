@@ -72,6 +72,9 @@ public class OregonDecoder implements ProtocolDecoder {
     public static final int RAIN_RATE_MM = 9;           // 3 Nibbles, rain in mm BCD in reverse order
     public static final int TOTAL_RAIN_MM = 12;         // 5 Nibbles, rain in mm BCD in reverse order
 
+    public static final int RAIN_RATE_INCH = 9;         // 4 Nibbles, rain in inch BCD in reverse order
+    public static final int TOTAL_RAIN_INCH = 13;       // 6 Nibbles, rain in inch BCD in reverse order
+
     public static final int BAROMETER = 17;             // 3 Nibbles, pressure as binary value
 
     protected int m_State = IDLE;
@@ -94,6 +97,7 @@ public class OregonDecoder implements ProtocolDecoder {
         addSensor(new TempSensor());
         addSensor(new WindSensor());
         addSensor(new RainSensorMm());
+        addSensor(new RainSensorInch());
         addSensor(new PressureSensor());
     }
 
@@ -155,7 +159,7 @@ public class OregonDecoder implements ProtocolDecoder {
             return;
         }
         int sensorType = decodeSensorType(nibbles);
-        int channel = nibbles[CHANNEL];
+        int channel = decodeChannelValue(nibbles[CHANNEL]);
         int rollingId = (nibbles[IDENTITY] << 4) + nibbles[IDENTITY + 1];
         int lowBattery = (nibbles[FLAGS] & LOW_BATTERY_BIT) != 0 ? 1 : 0;
         ProtocolMessage message = new ProtocolMessage("Oregon", sensorType, rollingId, currentSensor.messageLength());
@@ -178,6 +182,9 @@ public class OregonDecoder implements ProtocolDecoder {
         if (currentSensor.hasRainMm()) {
             decodeRainMm(nibbles, message);
         }
+        if (currentSensor.hasRainInch()) {
+            decodeRainInch(nibbles, message);
+        }
         if (currentSensor.hasBarometer()) {
             decodeBarometer(nibbles, message);
         }
@@ -192,6 +199,22 @@ public class OregonDecoder implements ProtocolDecoder {
         m_State = IDLE;
     }
 
+    /**
+     * The channel is according to reference below expressed as a binary.
+     * Ref: http://wmrx00.sourceforge.net/Arduino/OregonScientific-RF-Protocols.pdf
+     */
+    private int decodeChannelValue(int channelAsBinary) {
+        switch (channelAsBinary) {
+        case 4:
+            return 3;
+        case 2:
+            return 2;
+        case 1:
+            return 1;
+        }
+        return 0;
+    }
+
     private void decodeBarometer(byte[] nibbles, ProtocolMessage message) {
         int pressure = (nibbles[BAROMETER + 2] << 8) + (nibbles[BAROMETER + 1] << 4) + nibbles[BAROMETER];
         message.addField(new FieldValue("Pressure", pressure));
@@ -202,6 +225,14 @@ public class OregonDecoder implements ProtocolDecoder {
         message.addField(new FieldValue("RainRate", rate));
         int rain = nibbles[TOTAL_RAIN_MM + 4] * 10000 + nibbles[TOTAL_RAIN_MM + 3] * 1000 +
                 nibbles[TOTAL_RAIN_MM + 2] * 100 + nibbles[TOTAL_RAIN_MM + 1] * 10 + nibbles[TOTAL_RAIN_MM];
+        message.addField(new FieldValue("TotalRain", rain));
+    }
+
+    private void decodeRainInch(byte[] nibbles, ProtocolMessage message) {
+        int rate = nibbles[RAIN_RATE_INCH + 3] * 1000 + nibbles[RAIN_RATE_INCH + 2] * 100 + nibbles[RAIN_RATE_INCH + 1] * 10 + nibbles[RAIN_RATE_INCH];
+        message.addField(new FieldValue("RainRate", rate));
+        int rain = nibbles[TOTAL_RAIN_INCH + 5] * 100000 + nibbles[TOTAL_RAIN_INCH + 4] * 10000 + nibbles[TOTAL_RAIN_INCH + 3] * 1000 +
+                nibbles[TOTAL_RAIN_INCH + 2] * 100 + nibbles[TOTAL_RAIN_INCH + 1] * 10 + nibbles[TOTAL_RAIN_INCH];
         message.addField(new FieldValue("TotalRain", rain));
     }
 
@@ -316,7 +347,7 @@ public class OregonDecoder implements ProtocolDecoder {
         public boolean hasRainMm() {
             return false;
         }
-        public boolean hasRainIn() {
+        public boolean hasRainInch() {
             return false;
         }
         public boolean hasBarometer() {
@@ -390,6 +421,25 @@ public class OregonDecoder implements ProtocolDecoder {
         }
         @Override
         public boolean hasRainMm() {
+            return true;
+        }
+    }
+    public static class RainSensorInch extends Sensor {
+        private static final String models = "PCR800";
+        private static final int codes[] = { 0x2914 };
+
+        @Override
+        public int[] idCodes() {
+            return codes;
+        }
+
+        @Override
+        public int messageLength() {
+            return 21;
+        }
+
+        @Override
+        public boolean hasRainInch() {
             return true;
         }
     }
